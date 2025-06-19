@@ -23,6 +23,7 @@ function initDB() {
         `CREATE TABLE IF NOT EXISTS users (
         userID INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        role TEXT NOT NULL,
         password TEXT NOT NULL
         )`, (err) => {
             if(err) {
@@ -32,19 +33,24 @@ function initDB() {
             }
         }
     );
-    
-    db.run(
-        `CREATE TABLE IF NOT EXISTS post (
-        postID INTEGER PRIMARY KEY AUTOINCREMENT,
-        post TEXT NOT NULL
-        )`, (err) => {
-            if(err) {
-                console.log(err)
-            } else {
-                console.log('Таблица post создана')
-            }
+    db.get(`SELECT * FROM users WHERE name = ?`, ['admin'], (err, row) => {
+        if(err){
+            console.log(err)
         }
-    );
+        if(!row){
+                    db.run(`INSERT INTO users (name, role, password) VALUES (?, ?,  ?)`, ['admin', 'admin', 'admin'], (err) => {
+        if(err) {
+            console.log(err)
+        } else {
+           console.log('Пользователь создан')
+        }
+    })
+        }else{
+            console.log('пользователь был создан')
+        }
+    })
+
+
 }
 
 app.post('/user', (req, res) => {
@@ -55,7 +61,7 @@ app.post('/user', (req, res) => {
     })
   }
   else {
-    db.run(`INSERT INTO users (name, password) VALUES (?, ?)`, [user.name, user.password], (err) => {
+    db.run(`INSERT INTO users (name,role, password) VALUES (?,?, ?)`, [user.name, 'user', user.password], (err) => {
         if(err) {
             console.log(err) // Для отладки
             res.status(500).json({ error: 'Ошибка базы данных' })
@@ -65,7 +71,19 @@ app.post('/user', (req, res) => {
     })
   }
 })
-
+app.get('/user/all', (req, res) => {
+        db.all(`SELECT * FROM users`, (err, row) => {
+            if(err) {
+                console.log(err)
+                res.status(500).json({ error: 'Ошибка базы данных' })
+            } else if(!row) {
+                res.status(404).json({ error: 'Пользователь не найден' })
+            } else {
+                res.status(200).json(row)
+            }
+        })
+    
+})
 app.get('/user/:id', (req, res) => {
     const id = req.params.id; 
     
@@ -86,46 +104,26 @@ app.get('/user/:id', (req, res) => {
 })
 
 
-app.post('/post', (req, res) => {
-    const post = req.body
-    if (!post.post){
-        res.status(400).json({ error: 'Должен содержать текст поста!' })
-    } else{
-        db.run('INSERT INTO post (post) VALUES (?)', [post.post], (err) => {
-            if(err){
-                console.log(err)
-                res.status(500).json({ error: 'Ошибка базы данных' })
-            }else{
-                res.status(201).json({ message: 'Пост создан' })
-            }
-        })
-    }
-})
 
-app.get('/post/:id', (req, res) => {
-    const id = req.params.id
-    if(!id){
-        res.status(400).json({ error: 'ID не указан' })
+app.post('/signin', (req, res) => {
+    const user = req.body;
+    if(!user.name || !user.password){
+        res.status(400).json({
+          message: "Не хватает логина или пароля"
+        })
     }else{
-        db.get(`SELECT * FROM post WHERE postID = ?`, [id], (err, row) => {
-            if(err){
+        db.get(`SELECT * FROM users WHERE name = (?) AND password = (?)`, [user.name, user.password], (err, row) => {
+            if(err) {
                 console.log(err)
                 res.status(500).json({ error: 'Ошибка базы данных' })
-            }else if(!row){
-                res.status(404).json({ error: 'Пост не найден' })
-            }else{
-                res.status(200).json({
-                    message: 'Пост найден',
-                    post: row
-                })
+            } else if(!row) {
+                res.status(404).json({ error: 'Вы ввели не верный логин или пароль' })
+            } else {
+                res.status(200).json(row)
             }
         })
     }
 })
-
-
-
-
 
 app.listen(PORT, () => {
     console.log(`http://localhost:${PORT}`)
